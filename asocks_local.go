@@ -5,6 +5,7 @@ import (
     "net"
     "strconv"
     "runtime"
+    "time"
 )
 
 func handleConnection(conn net.Conn) {
@@ -87,7 +88,7 @@ func getRequest(conn net.Conn) (err error){
     host := net.JoinHostPort(serverAddr, strconv.Itoa(serverPort))
    
     var remote net.Conn
-    if remote, err = net.Dial("tcp", host); err != nil {
+    if remote, err = net.DialTimeout("tcp", host, time.Second * 5); err != nil {
         return
     }
    
@@ -105,8 +106,8 @@ func getRequest(conn net.Conn) (err error){
         return 
     }
     
-    go pipeThenClose(remote, conn)
-    pipeThenClose(conn, remote)
+    go pipeThenClose(conn, remote)
+    pipeThenClose(remote, conn)
     return nil
 }
 
@@ -119,12 +120,10 @@ func pipeThenClose(src, dst net.Conn) {
             data := buf[0:n]
             encodeData(data)
             if _, err := dst.Write(data); err != nil {
-                fmt.Println("pipe write error:", err.Error())
                 break
             }
         }
-        if err != nil && err.Error() != "EOF" {
-            fmt.Println("pipe read error:", err)
+        if err != nil {
             break
         }
     }
@@ -137,9 +136,7 @@ func encodeData(data []byte) {
 }
 
 const (
-    serverAddr = "127.0.0.1"
-    //serverAddr = "123.56.160.111"
-    //serverAddr = "106.187.103.17"
+    serverAddr = "106.187.103.17"
     serverPort = 17570
 )
 

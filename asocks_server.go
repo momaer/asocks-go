@@ -6,6 +6,7 @@ import (
     "strconv"
     "encoding/binary"
     "runtime"
+    "time"
 )
 
 func handleConnection(conn net.Conn) {
@@ -64,12 +65,12 @@ func getRequest(conn net.Conn) (err error){
     fmt.Println("dst:", host)
 
     var remote net.Conn
-    if remote, err = net.Dial("tcp", host); err != nil {
+    if remote, err = net.DialTimeout("tcp", host, time.Second * 5); err != nil {
         return
     }
     
-    go pipeThenClose(remote, conn)
-    pipeThenClose(conn, remote)
+    go pipeThenClose(conn, remote)
+    pipeThenClose(remote, conn)
     return nil
 }
 
@@ -82,12 +83,10 @@ func pipeThenClose(src, dst net.Conn) {
             data := buf[0:n]
             encodeData(data)
             if _, err := dst.Write(data); err != nil {
-                fmt.Println("pipe write error:", err)
                 break
             }
         }
-        if err != nil && err.Error() != "EOF" {
-            fmt.Println("pipe read error:", err)
+        if err != nil {
             break
         }
     }
