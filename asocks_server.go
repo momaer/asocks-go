@@ -21,8 +21,7 @@ func getRequest(conn net.Conn) (err error){
     var n int
     buf := make([]byte, 256)
 
-    n, err = conn.Read(buf)
-    if err != nil {
+    if n, err = conn.Read(buf); err != nil {
         return
     }
 
@@ -56,7 +55,7 @@ func getRequest(conn net.Conn) (err error){
             dstAddrLen = 16
         default:
             // unnormal, close conn
-            fmt.Println("error ATYP:", buf[0])
+            err = fmt.Errorf("error ATYP:%d\n", buf[0])
             return
     }
     port := binary.BigEndian.Uint16(buf[1 + dstAddrLen: 1 + dstAddrLen + 2])
@@ -65,8 +64,7 @@ func getRequest(conn net.Conn) (err error){
     fmt.Println("dst:", host)
 
     var remote net.Conn
-    remote, err = net.Dial("tcp", host)
-    if err != nil {
+    if remote, err = net.Dial("tcp", host); err != nil {
         return
     }
     
@@ -84,10 +82,12 @@ func pipeThenClose(src, dst net.Conn) {
             data := buf[0:n]
             encodeData(data)
             if _, err := dst.Write(data); err != nil {
+                fmt.Println("pipe write error:", err)
                 break
             }
         }
-        if err != nil {
+        if err != nil && err.Error() != "EOF" {
+            fmt.Println("pipe read error:", err)
             break
         }
     }
@@ -102,6 +102,7 @@ func encodeData(data []byte) {
 func main() {
     numCPU := runtime.NumCPU()
     runtime.GOMAXPROCS(numCPU)
+
     ln, err := net.Listen("tcp", ":17570") 
     if err != nil {
         fmt.Println("listen error:", err)
@@ -116,7 +117,6 @@ func main() {
             fmt.Println("accept error:", err)
             continue
         }
-    	fmt.Println("new connection:", conn.RemoteAddr())
 
         go handleConnection(conn)
     }

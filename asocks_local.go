@@ -5,21 +5,21 @@ import (
     "net"
     "strconv"
     "runtime"
-    "io"
 )
 
-func handleConnection(conn net.Conn) (err error) {
+func handleConnection(conn net.Conn) {
     closed := false
 
     defer func(){
         if !closed {
-            //fmt.Println("close connection.")
             conn.Close()
         }
     }()
 
-    buf := make([]byte, 256)
     var n int;
+    var err error;
+    buf := make([]byte, 256)
+
     if n, err = conn.Read(buf); err != nil {
         fmt.Println("从client读握手就读失败了。err:", err)
         return 
@@ -44,6 +44,7 @@ func handleConnection(conn net.Conn) (err error) {
     if err != nil {
         closed = false
         fmt.Println("get request err:", err)
+        return
     }
 
     closed = true
@@ -51,12 +52,14 @@ func handleConnection(conn net.Conn) (err error) {
 }
 
 func getRequest(conn net.Conn) (err error){
+    var n int
     buf := make([]byte, 256)
-    var n int 
+
     if n, err = conn.Read(buf); err != nil {
         fmt.Println("getRequest read error:", err)
         return
     }
+
     if buf[0] != 5 && buf[1] != 1 && buf[2] != 0 {
         fmt.Println("getRequest not socks5 protocol.")
         return
@@ -83,7 +86,7 @@ func getRequest(conn net.Conn) (err error){
     copy(rawRequest, buf[3:n])
     host := net.JoinHostPort(serverAddr, strconv.Itoa(serverPort))
    
-    var remote net.Conn  
+    var remote net.Conn
     if remote, err = net.Dial("tcp", host); err != nil {
         return
     }
@@ -120,8 +123,8 @@ func pipeThenClose(src, dst net.Conn) {
                 break
             }
         }
-        if err != nil && err != io.EOF {
-            fmt.Println("pipe read error:", err.Error())
+        if err != nil && err.Error() != "EOF" {
+            fmt.Println("pipe read error:", err)
             break
         }
     }
@@ -134,8 +137,9 @@ func encodeData(data []byte) {
 }
 
 const (
+    serverAddr = "127.0.0.1"
     //serverAddr = "123.56.160.111"
-    serverAddr = "106.187.103.17"
+    //serverAddr = "106.187.103.17"
     serverPort = 17570
 )
 
@@ -157,7 +161,7 @@ func main() {
             fmt.Println("accept error:", err) 
             continue
         }
-        //fmt.Println("new connection:", conn.RemoteAddr())
+
         go handleConnection(conn)
     }
 }
