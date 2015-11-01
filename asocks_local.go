@@ -5,6 +5,7 @@ import (
     "net"
     "strconv"
     "runtime"
+    "io"
 )
 
 func handleConnection(conn net.Conn) (err error) {
@@ -76,6 +77,7 @@ func getRequest(conn net.Conn) (err error){
             rawRequest = make([]byte, 1 + 16 + 2)
         default:
             // unnormal, close conn
+            err = fmt.Errorf("request type不正确：%d", buf[3])
             return
     }
     copy(rawRequest, buf[3:n])
@@ -114,10 +116,12 @@ func pipeThenClose(src, dst net.Conn) {
             data := buf[0:n]
             encodeData(data)
             if _, err := dst.Write(data); err != nil {
+                fmt.Println("pipe write error:", err.Error())
                 break
             }
         }
-        if err != nil {
+        if err != nil && err != io.EOF {
+            fmt.Println("pipe read error:", err.Error())
             break
         }
     }
@@ -130,7 +134,8 @@ func encodeData(data []byte) {
 }
 
 const (
-    serverAddr = "123.56.160.111"
+    //serverAddr = "123.56.160.111"
+    serverAddr = "106.187.103.17"
     serverPort = 17570
 )
 
@@ -152,7 +157,7 @@ func main() {
             fmt.Println("accept error:", err) 
             continue
         }
-        fmt.Println("new connection:", conn.RemoteAddr())
+        //fmt.Println("new connection:", conn.RemoteAddr())
         go handleConnection(conn)
     }
 }
