@@ -4,49 +4,47 @@ import (
     "fmt"
     "net"
     "strconv"
+    "runtime"
 )
 
 func handleConnection(conn net.Conn) (err error) {
     closed := false
+
     defer func(){
-        if closed {
-            fmt.Println("close connection.")
+        if !closed {
+            //fmt.Println("close connection.")
             conn.Close()
         }
     }()
+
     buf := make([]byte, 256)
     var n int;
     if n, err = conn.Read(buf); err != nil {
-    
-        closed = true
+        fmt.Println("从client读握手就读失败了。err:", err)
         return 
     }
 
     if n >= 3 {
         if buf[0] != 5 {
-            fmt.Println("ver:", buf[0])
-            closed = true
+            fmt.Printf("握手时读取到的socks版本是%d。\n", buf[0])
             return
         }
     } else {
-        fmt.Printf("read %d bytes.\n", n)
-        closed = true
+        fmt.Printf("握手时，读到了%d个字节。\n", n)
         return
     }
     
     if _, err = conn.Write([]byte{5, 0}); err != nil {
-        closed = true
+        fmt.Println("握手时，写失败。err:", err)
         return
     }
-    
-    fmt.Println("send handshark reply.")
  
     err = getRequest(conn)
     if err != nil {
+        closed = false
         fmt.Println("get request err:", err)
     }
 
-    fmt.Println("get request done")
     closed = true
     return
 }
@@ -59,7 +57,7 @@ func getRequest(conn net.Conn) (err error){
         return
     }
     if buf[0] != 5 && buf[1] != 1 && buf[2] != 0 {
-        fmt.Println("not socks5 protocol.")
+        fmt.Println("getRequest not socks5 protocol.")
         return
     }
 
@@ -87,21 +85,24 @@ func getRequest(conn net.Conn) (err error){
     if remote, err = net.Dial("tcp", host); err != nil {
         return
     }
-    fmt.Println("connect to server successed.")
    
     encodeData(rawRequest) 
     if n, err = remote.Write(rawRequest); err != nil {
+        fmt.Println("getRequest 发送request到远程服务器失败。err:", err)
+        remote.Close()
         return
     }
 
     // send reply
     var replyBuf []byte = []byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}
-    conn.Write(replyBuf)
-    fmt.Println("send request reply.")
+    if _, err = conn.Write(replyBuf); err != nil {
+        fmt.Println("getRequest 发送reply给客户端失败。err:", err) 
+        return 
+    }
     
-    go pipeThenClose(conn, remote)
-    pipeThenClose(remote, conn)
-    return
+    go pipeThenClose(remote, conn)
+    pipeThenClose(conn, remote)
+    return nil
 }
 
 func pipeThenClose(src, dst net.Conn) {
@@ -129,11 +130,13 @@ func encodeData(data []byte) {
 }
 
 const (
-    serverAddr = "actself.me"
+    serverAddr = "123.56.160.111"
     serverPort = 17570
 )
 
 func main() {
+    numCPU := runtime.NumCPU()
+    runtime.GOMAXPROCS(numCPU)
 
     ln, err := net.Listen("tcp", ":1080")
     if  err != nil {
@@ -149,7 +152,7 @@ func main() {
             fmt.Println("accept error:", err) 
             continue
         }
-        fmt.Println("connection:", conn.RemoteAddr())
+        fmt.Println("new connection:", conn.RemoteAddr())
         go handleConnection(conn)
     }
 }

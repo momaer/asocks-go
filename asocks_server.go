@@ -9,28 +9,25 @@ import (
 )
 
 func handleConnection(conn net.Conn) {
+    err := getRequest(conn)
 
-    fmt.Println("new conn:", conn.RemoteAddr())
-
-    defer func(){
-        fmt.Println("close connection.")
+    if err != nil {
+        fmt.Println("err:", err)
         conn.Close()
-    }()
-
-    getRequest(conn)
+    }
 }
 
-func getRequest(conn net.Conn) {
+func getRequest(conn net.Conn) (err error){
     var n int
-    var err error
     buf := make([]byte, 256)
+
     n, err = conn.Read(buf)
     if err != nil {
         return
     }
 
     if n < 3 {
-        fmt.Printf("get request read %d bytes", n)
+        err = fmt.Errorf("get request read %d bytes.", n)
         return
     }
 
@@ -70,28 +67,28 @@ func getRequest(conn net.Conn) {
     var remote net.Conn
     remote, err = net.Dial("tcp", host)
     if err != nil {
-        fmt.Println("connect to dst failed. err:", err)
         return
     }
     
     go pipeThenClose(remote, conn)
     pipeThenClose(conn, remote)
+    return nil
 }
 
 func pipeThenClose(src, dst net.Conn) {
     defer dst.Close()
     for {
         buf := make([]byte, 5120)
-        n, err := src.Read(buf)
-        if n > 0 { 
-                data := buf[0:n]
-                encodeData(data)
-                if _, err = dst.Write(data); err != nil {
-                    break; 
-                }
+        n, err := src.Read(buf);
+        if n > 0 {
+            data := buf[0:n]
+            encodeData(data)
+            if _, err := dst.Write(data); err != nil {
+                break
+            }
         }
         if err != nil {
-            break;
+            break
         }
     }
 }
@@ -119,6 +116,8 @@ func main() {
             fmt.Println("accept error:", err)
             continue
         }
+    	fmt.Println("new connection:", conn.RemoteAddr())
+
         go handleConnection(conn)
     }
 }
