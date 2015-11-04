@@ -6,6 +6,7 @@ import (
     "strconv"
     "runtime"
     "io"
+    "time"
 )
 
 func handleConnection(conn *net.TCPConn) {
@@ -119,7 +120,7 @@ func pipeThenClose(src, dst *net.TCPConn) {
     }()
 
     for {
-        //src.SetReadDeadline(time.Now().Add(300 * time.Second))
+        src.SetReadDeadline(time.Now().Add(600 * time.Second))
         buf := make([]byte, 5120) 
         n, err := src.Read(buf);
         if n > 0 {
