@@ -60,7 +60,7 @@ func getRequest(conn *net.TCPConn) (err error){
             err = fmt.Errorf("error ATYP:%d\n", buf[0])
             return
     }
-    port := binary.BigEndian.Uint16(buf[1 + dstAddrLen: 1 + dstAddrLen + 2])
+    port := binary.BigEndian.Uint16(buf[1 + dstAddrLen : 1 + dstAddrLen + 2])
     host = net.JoinHostPort(host, strconv.Itoa(int(port)))
 
     fmt.Println("dst:", host)
@@ -69,6 +69,13 @@ func getRequest(conn *net.TCPConn) (err error){
     remoteAddr, _ := net.ResolveTCPAddr("tcp", host)
     if remote, err = net.DialTCP("tcp", nil, remoteAddr); err != nil {
         return
+    }
+    
+    // 如果有额外的数据，转发给remote。正常情况下是没有额外数据的，但如果客户端通过端口转发连接服务端，就会有
+    if n > 1 + dstAddrLen + 2 {
+        if _, err = remote.Write(buf[1 + dstAddrLen + 2 : n]); err != nil {
+            return  
+        }
     }
     
     go pipeThenClose(conn, remote)
