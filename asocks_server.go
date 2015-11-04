@@ -6,10 +6,11 @@ import (
     "strconv"
     "encoding/binary"
     "runtime"
-    "time"
+    //"time"
+    "io"
 )
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn *net.TCPConn) {
     err := getRequest(conn)
 
     if err != nil {
@@ -18,7 +19,7 @@ func handleConnection(conn net.Conn) {
     }
 }
 
-func getRequest(conn net.Conn) (err error){
+func getRequest(conn *net.TCPConn) (err error){
     var n int
     buf := make([]byte, 256)
 
@@ -64,8 +65,9 @@ func getRequest(conn net.Conn) (err error){
 
     fmt.Println("dst:", host)
 
-    var remote net.Conn
-    if remote, err = net.DialTimeout("tcp", host, time.Second * 5); err != nil {
+    var remote *net.TCPConn
+    remoteAddr, _ := net.ResolveTCPAddr("tcp", host)
+    if remote, err = net.DialTCP("tcp", nil, remoteAddr); err != nil {
         return
     }
     
@@ -74,8 +76,12 @@ func getRequest(conn net.Conn) (err error){
     return nil
 }
 
-func pipeThenClose(src, dst net.Conn) {
-    defer dst.Close()
+func pipeThenClose(src, dst *net.TCPConn) {
+    defer func(){
+        src.CloseRead()
+        dst.CloseWrite()
+    }()
+
     for {
         buf := make([]byte, 5120)
         n, err := src.Read(buf);
@@ -83,10 +89,14 @@ func pipeThenClose(src, dst net.Conn) {
             data := buf[0:n]
             encodeData(data)
             if _, err := dst.Write(data); err != nil {
+                fmt.Println("pipe write error:", err)
                 break
             }
         }
         if err != nil {
+            if err != io.EOF {
+                fmt.Println("pipe read error:", err)
+            }
             break
         }
     }
@@ -101,17 +111,19 @@ func encodeData(data []byte) {
 func main() {
     numCPU := runtime.NumCPU()
     runtime.GOMAXPROCS(numCPU)
-
-    ln, err := net.Listen("tcp", ":17570") 
+    
+    bindAddr,_ := net.ResolveTCPAddr("tcp", ":17570")
+    ln, err := net.ListenTCP("tcp", bindAddr) 
     if err != nil {
         fmt.Println("listen error:", err)
         return
     }
+    defer ln.Close()
 
     fmt.Println("listening ", ln.Addr())
 
     for {
-        conn, err := ln.Accept()
+        conn, err := ln.AcceptTCP()
         if err != nil {
             fmt.Println("accept error:", err)
             continue

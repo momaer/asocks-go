@@ -5,10 +5,10 @@ import (
     "net"
     "strconv"
     "runtime"
-    "time"
+    "io"
 )
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn *net.TCPConn) {
     closed := false
 
     defer func(){
@@ -44,7 +44,7 @@ func handleConnection(conn net.Conn) {
     err = getRequest(conn)
     if err != nil {
         closed = false
-        fmt.Println("get request err:", err)
+        fmt.Println("get request err:", err.Error())
         return
     }
 
@@ -52,17 +52,17 @@ func handleConnection(conn net.Conn) {
     return
 }
 
-func getRequest(conn net.Conn) (err error){
+func getRequest(conn *net.TCPConn) (err error){
     var n int
     buf := make([]byte, 256)
 
     if n, err = conn.Read(buf); err != nil {
-        fmt.Println("getRequest read error:", err)
+        err = fmt.Errorf("getRequest read error:", err)
         return
     }
 
     if buf[0] != 5 && buf[1] != 1 && buf[2] != 0 {
-        fmt.Println("getRequest not socks5 protocol.")
+        err = fmt.Errorf("getRequest not socks5 protocol.")
         return
     }
 
@@ -87,8 +87,9 @@ func getRequest(conn net.Conn) (err error){
     copy(rawRequest, buf[3:n])
     host := net.JoinHostPort(serverAddr, strconv.Itoa(serverPort))
    
-    var remote net.Conn
-    if remote, err = net.DialTimeout("tcp", host, time.Second * 5); err != nil {
+    var remote *net.TCPConn
+    remoteAddr, _:= net.ResolveTCPAddr("tcp", host)
+    if remote, err = net.DialTCP("tcp", nil, remoteAddr); err != nil {
         return
     }
    
@@ -111,19 +112,28 @@ func getRequest(conn net.Conn) (err error){
     return nil
 }
 
-func pipeThenClose(src, dst net.Conn) {
-    defer dst.Close()
+func pipeThenClose(src, dst *net.TCPConn) {
+    defer func(){
+        src.CloseRead()
+        dst.CloseWrite()
+    }()
+
     for {
+        //src.SetReadDeadline(time.Now().Add(300 * time.Second))
         buf := make([]byte, 5120) 
         n, err := src.Read(buf);
         if n > 0 {
             data := buf[0:n]
             encodeData(data)
             if _, err := dst.Write(data); err != nil {
+                fmt.Println("pipe write error:", err)
                 break
             }
         }
         if err != nil {
+            if err != io.EOF {
+                fmt.Println("pipe read error:", err)
+            }
             break
         }
     }
@@ -137,23 +147,26 @@ func encodeData(data []byte) {
 
 const (
     serverAddr = "106.187.103.17"
+    //serverAddr = "127.0.0.1"
     serverPort = 17570
 )
 
 func main() {
     numCPU := runtime.NumCPU()
     runtime.GOMAXPROCS(numCPU)
-
-    ln, err := net.Listen("tcp", ":1080")
+    
+    bindAddr, _ := net.ResolveTCPAddr("tcp", ":1080")
+    ln, err := net.ListenTCP("tcp", bindAddr)
     if  err != nil {
         fmt.Println("listen error:", err)
         return
     }
+    defer ln.Close()
 
     fmt.Println("listening ", ln.Addr())
 
     for {
-        conn, err := ln.Accept()
+        conn, err := ln.AcceptTCP()
         if err != nil {
             fmt.Println("accept error:", err) 
             continue
