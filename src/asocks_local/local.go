@@ -7,6 +7,7 @@ import (
     "time"
     "flag"
     "os"
+    "asocks"
 )
 
 func handleConnection(conn *net.TCPConn) {
@@ -58,7 +59,7 @@ func getRequest(conn *net.TCPConn) (err error){
     buf := make([]byte, 256)
 
     if n, err = conn.Read(buf); err != nil {
-        err = fmt.Errorf("getRequest read error:", err)
+        err = fmt.Errorf("getRequest read error:", err.Error())
         return
     }
 
@@ -117,9 +118,11 @@ func pipeThenClose(src, dst *net.TCPConn) {
         dst.CloseWrite()
     }()
 
+    buf := asocks.GetBuffer()
+    defer asocks.GiveBuffer(buf)
+
     for {
         src.SetReadDeadline(time.Now().Add(600 * time.Second))
-        buf := make([]byte, 5120) 
         n, err := src.Read(buf);
         if n > 0 {
             data := buf[0:n]
@@ -133,11 +136,27 @@ func pipeThenClose(src, dst *net.TCPConn) {
             /*if err != io.EOF {
                 fmt.Println("pipe read error:", err)
             }*/
-            
             break
         }
     }
 }
+
+/*func getBuffer() []byte {
+    var buffer []byte
+    select {
+        case buffer = <-bufferPool:
+        default:
+            buffer = make([]byte, 5120)
+    }
+    return buffer
+}
+
+func giveBuffer(buffer []byte) {
+    select {
+        case bufferPool <- buffer:
+        default:
+    }
+}*/
 
 func encodeData(data []byte) {
     for i, _ := range data {
@@ -152,6 +171,7 @@ func printUsage() {
 var localAddr string
 var serverAddr string
 var server net.TCPAddr
+//var bufferPool = make(chan []byte, 100)
 
 func main() {
     flag.StringVar(&localAddr, "l", "127.0.0.1:1080", "本地监听IP:端口")
