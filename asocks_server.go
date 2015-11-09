@@ -7,7 +7,7 @@ import (
     "encoding/binary"
     "runtime"
     "time"
-    "io"
+    "flag"
 )
 
 func handleConnection(conn *net.TCPConn) {
@@ -97,14 +97,10 @@ func pipeThenClose(src, dst *net.TCPConn) {
             data := buf[0:n]
             encodeData(data)
             if _, err := dst.Write(data); err != nil {
-                fmt.Println("pipe write error:", err)
                 break
             }
         }
         if err != nil {
-            if err != io.EOF {
-                fmt.Println("pipe read error:", err)
-            }
             break
         }
     }
@@ -117,10 +113,19 @@ func encodeData(data []byte) {
 }
 
 func main() {
+    var localAddr string
+    flag.StringVar(&localAddr, "l", "0.0.0.0:1080", "监听端口")
+    flag.Parse()
+
     numCPU := runtime.NumCPU()
     runtime.GOMAXPROCS(numCPU)
     
-    bindAddr,_ := net.ResolveTCPAddr("tcp", ":17570")
+    bindAddr, err := net.ResolveTCPAddr("tcp", localAddr)
+    if err != nil {
+        fmt.Printf("resolve %s failed. err:%s\n", localAddr, err)
+        return
+    }    
+
     ln, err := net.ListenTCP("tcp", bindAddr) 
     if err != nil {
         fmt.Println("listen error:", err)

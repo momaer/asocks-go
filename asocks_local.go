@@ -3,10 +3,10 @@ package main
 import (
     "fmt"
     "net"
-    "strconv"
     "runtime"
-    "io"
     "time"
+    "flag"
+    "os"
 )
 
 func handleConnection(conn *net.TCPConn) {
@@ -86,11 +86,9 @@ func getRequest(conn *net.TCPConn) (err error){
             return
     }
     copy(rawRequest, buf[3:n])
-    host := net.JoinHostPort(serverAddr, strconv.Itoa(serverPort))
    
     var remote *net.TCPConn
-    remoteAddr, _:= net.ResolveTCPAddr("tcp", host)
-    if remote, err = net.DialTCP("tcp", nil, remoteAddr); err != nil {
+    if remote, err = net.DialTCP("tcp", nil, &server); err != nil {
         return
     }
    
@@ -127,14 +125,15 @@ func pipeThenClose(src, dst *net.TCPConn) {
             data := buf[0:n]
             encodeData(data)
             if _, err := dst.Write(data); err != nil {
-                fmt.Println("pipe write error:", err)
+                //fmt.Println("pipe write error:", err)
                 break
             }
         }
         if err != nil {
-            if err != io.EOF {
+            /*if err != io.EOF {
                 fmt.Println("pipe read error:", err)
-            }
+            }*/
+            
             break
         }
     }
@@ -146,17 +145,35 @@ func encodeData(data []byte) {
     }
 }
 
-const (
-    serverAddr = "106.187.103.17"
-    //serverAddr = "127.0.0.1"
-    serverPort = 17570
-)
+func printUsage() {
+    fmt.Printf("Usage:%s -s server_addr:server_port -l local_addr:local_port\n", os.Args[0])
+}
+
+var localAddr string
+var serverAddr string
+var server net.TCPAddr
 
 func main() {
+    flag.StringVar(&localAddr, "l", "127.0.0.1:1080", "本地监听IP:端口")
+    flag.StringVar(&serverAddr, "s", "", "服务器IP:端口")
+    flag.Parse()
+
+    if serverAddr == "" {
+        printUsage()
+        return
+    }
+
+    i, err:= net.ResolveTCPAddr("tcp", serverAddr)
+    if err != nil {
+        fmt.Println("resolve ", serverAddr, " failed. err:", err)
+        return
+    }
+    server = *i;
+
     numCPU := runtime.NumCPU()
     runtime.GOMAXPROCS(numCPU)
     
-    bindAddr, _ := net.ResolveTCPAddr("tcp", ":1080")
+    bindAddr, _ := net.ResolveTCPAddr("tcp", localAddr)
     ln, err := net.ListenTCP("tcp", bindAddr)
     if  err != nil {
         fmt.Println("listen error:", err)
@@ -165,6 +182,7 @@ func main() {
     defer ln.Close()
 
     fmt.Println("listening ", ln.Addr())
+    fmt.Println("server:", server.String())
 
     for {
         conn, err := ln.AcceptTCP()
