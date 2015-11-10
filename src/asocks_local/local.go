@@ -128,35 +128,14 @@ func pipeThenClose(src, dst *net.TCPConn) {
             data := buf[0:n]
             encodeData(data)
             if _, err := dst.Write(data); err != nil {
-                //fmt.Println("pipe write error:", err)
                 break
             }
         }
         if err != nil {
-            /*if err != io.EOF {
-                fmt.Println("pipe read error:", err)
-            }*/
             break
         }
     }
 }
-
-/*func getBuffer() []byte {
-    var buffer []byte
-    select {
-        case buffer = <-bufferPool:
-        default:
-            buffer = make([]byte, 5120)
-    }
-    return buffer
-}
-
-func giveBuffer(buffer []byte) {
-    select {
-        case bufferPool <- buffer:
-        default:
-    }
-}*/
 
 func encodeData(data []byte) {
     for i, _ := range data {
@@ -171,7 +150,6 @@ func printUsage() {
 var localAddr string
 var serverAddr string
 var server net.TCPAddr
-//var bufferPool = make(chan []byte, 100)
 
 func main() {
     flag.StringVar(&localAddr, "l", "127.0.0.1:1080", "本地监听IP:端口")

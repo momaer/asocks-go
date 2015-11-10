@@ -8,6 +8,7 @@ import (
     "runtime"
     "time"
     "flag"
+    "asocks"
 )
 
 func handleConnection(conn *net.TCPConn) {
@@ -89,9 +90,11 @@ func pipeThenClose(src, dst *net.TCPConn) {
         dst.CloseWrite()
     }()
 
+    buf := asocks.GetBuffer()
+    defer asocks.GiveBuffer(buf)
+
     for {
         src.SetReadDeadline(time.Now().Add(600 * time.Second))
-        buf := make([]byte, 5120)
         n, err := src.Read(buf);
         if n > 0 {
             data := buf[0:n]
@@ -124,7 +127,7 @@ func main() {
     if err != nil {
         fmt.Printf("resolve %s failed. err:%s\n", localAddr, err)
         return
-    }    
+    }
 
     ln, err := net.ListenTCP("tcp", bindAddr) 
     if err != nil {
