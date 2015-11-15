@@ -78,23 +78,29 @@ func getRequest(conn *net.TCPConn) (err error){
             return  
         }
     }
-    
-    go pipeThenClose(conn, remote)
-    pipeThenClose(remote, conn)
+   
+    finish := make(chan bool, 2) 
+    go pipeThenClose(conn, remote, finish)
+    pipeThenClose(remote, conn, finish)
+    <- finish
+    <- finish
+    conn.Close()
+    remote.Close()
     return nil
 }
 
-func pipeThenClose(src, dst *net.TCPConn) {
+func pipeThenClose(src, dst *net.TCPConn, finish chan bool) {
     defer func(){
-        src.CloseRead()
-        dst.CloseWrite()
+        //src.CloseRead()
+        //dst.CloseWrite()
+        finish <- true
     }()
 
     buf := asocks.GetBuffer()
     defer asocks.GiveBuffer(buf)
 
     for {
-        src.SetReadDeadline(time.Now().Add(600 * time.Second))
+        src.SetReadDeadline(time.Now().Add(60 * time.Second))
         n, err := src.Read(buf);
         if n > 0 {
             data := buf[0:n]

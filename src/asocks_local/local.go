@@ -19,8 +19,8 @@ func handleConnection(conn *net.TCPConn) {
         }
     }()
 
-    var n int;
-    var err error;
+    var n int
+    var err error
     buf := make([]byte, 256)
 
     if n, err = conn.Read(buf); err != nil {
@@ -45,7 +45,6 @@ func handleConnection(conn *net.TCPConn) {
  
     err = getRequest(conn)
     if err != nil {
-        closed = false
         fmt.Println("get request err:", err.Error())
         return
     }
@@ -104,26 +103,34 @@ func getRequest(conn *net.TCPConn) (err error){
     var replyBuf []byte = []byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}
     if _, err = conn.Write(replyBuf); err != nil {
         fmt.Println("getRequest 发送reply给客户端失败。err:", err) 
+        remote.Close()
         return 
     }
-    
-    go pipeThenClose(conn, remote)
-    pipeThenClose(remote, conn)
+   
+    finishChannel := make(chan bool, 2) 
+    go pipeThenClose(conn, remote, finishChannel)
+    pipeThenClose(remote, conn, finishChannel)
+    <- finishChannel
+    <- finishChannel
+    conn.Close()
+    remote.Close()
+
     return nil
 }
 
-func pipeThenClose(src, dst *net.TCPConn) {
+func pipeThenClose(src, dst *net.TCPConn, finishChannel chan bool) {
     defer func(){
-        src.CloseRead()
-        dst.CloseWrite()
+        //src.CloseRead()
+        //dst.CloseWrite()
+        finishChannel <- true
     }()
 
     buf := asocks.GetBuffer()
     defer asocks.GiveBuffer(buf)
 
     for {
-        src.SetReadDeadline(time.Now().Add(600 * time.Second))
-        n, err := src.Read(buf);
+        src.SetReadDeadline(time.Now().Add(60 * time.Second))
+        n, err := src.Read(buf)
         if n > 0 {
             data := buf[0:n]
             encodeData(data)
@@ -139,7 +146,7 @@ func pipeThenClose(src, dst *net.TCPConn) {
 
 func encodeData(data []byte) {
     for i, _ := range data {
-        data[i] ^= 128;
+        data[i] ^= 128
     }
 }
 
@@ -166,7 +173,7 @@ func main() {
         fmt.Println("resolve ", serverAddr, " failed. err:", err)
         return
     }
-    server = *i;
+    server = *i
 
     numCPU := runtime.NumCPU()
     runtime.GOMAXPROCS(numCPU)

@@ -13,15 +13,21 @@ func handleConn(conn *net.TCPConn, raddr *net.TCPAddr) {
         conn.Close()
         return
     }
-
-    go pipe(conn, remote)
-    pipe(remote, conn)
+    
+    finish := make(chan bool, 2)
+    go pipe(conn, remote, finish)
+    pipe(remote, conn, finish)
+    <- finish
+    <- finish
+    conn.Close()
+    remote.Close()
 }
 
-func pipe(src, dst *net.TCPConn) {
+func pipe(src, dst *net.TCPConn, finish chan bool) {
     defer func() {
-        src.CloseRead()
-        dst.CloseWrite()
+        //src.CloseRead()
+        //dst.CloseWrite()
+        finish <- true
     }()
 
     io.Copy(dst, src)
