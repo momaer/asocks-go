@@ -120,8 +120,8 @@ func getRequest(conn *net.TCPConn) (err error){
 
 func pipeThenClose(src, dst *net.TCPConn, finishChannel chan bool) {
     defer func(){
-        //src.CloseRead()
-        //dst.CloseWrite()
+        src.CloseRead()
+        dst.CloseWrite()
         finishChannel <- true
     }()
 

@@ -86,13 +86,14 @@ func getRequest(conn *net.TCPConn) (err error){
     <- finish
     conn.Close()
     remote.Close()
+
     return nil
 }
 
 func pipeThenClose(src, dst *net.TCPConn, finish chan bool) {
     defer func(){
-        //src.CloseRead()
-        //dst.CloseWrite()
+        src.CloseRead()
+        dst.CloseWrite()
         finish <- true
     }()
 
