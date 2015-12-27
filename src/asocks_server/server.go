@@ -9,6 +9,7 @@ import (
     "time"
     "flag"
     "asocks"
+    "io"
 )
 
 func handleConnection(conn *net.TCPConn) {
@@ -22,46 +23,56 @@ func handleConnection(conn *net.TCPConn) {
 
 func getRequest(conn *net.TCPConn) (err error){
     var n int
-    buf := make([]byte, 256)
+    buf := make([]byte, 257)
 
-    if n, err = conn.Read(buf); err != nil {
-        return
-    }
-
-    if n < 3 {
-        err = fmt.Errorf("get request read %d bytes.", n)
+    if n, err = io.ReadAtLeast(conn, buf, 2); err != nil {
         return
     }
 
     encodeData(buf)
 
-    var dstAddr []byte;
-    var host string;
-    var dstAddrLen int;
+    addressType := buf[0]
+    reqLen := 0;
 
-    switch buf[0] {
+    switch addressType {
         case 1:
             // ipv4
-            dstAddr = buf[1:5]
-            host = net.IP(dstAddr).String()
-            dstAddrLen = 4 
+            reqLen = 1 + 4 + 2
         case 3:
             // domain
-            domainLen := buf[1]
-            dstAddr = buf[2 : 2 + domainLen]
-            host = string(dstAddr)
-            dstAddrLen = int(domainLen) + 1
+            reqLen = 1 + 1 + int(buf[1]) + 2
         case 4:
             // ipv6
-            dstAddr = buf[1:17]
-            host = net.IP(dstAddr).String()
-            dstAddrLen = 16
+            reqLen = 1 + 16 + 2
         default:
             // unnormal, close conn
             err = fmt.Errorf("error ATYP:%d\n", buf[0])
             return
     }
-    port := binary.BigEndian.Uint16(buf[1 + dstAddrLen : 1 + dstAddrLen + 2])
+    
+    if n < reqLen {
+        if _, err = io.ReadFull(conn, buf[n : reqLen]); err != nil {
+            return
+        }
+        encodeData(buf[n:reqLen]) 
+    }
+
+    var host string;
+
+    switch addressType {
+        case 1:
+            // ipv4
+            host = net.IP(buf[1:5]).String()
+        case 3:
+            // domain
+            dstAddr := buf[2 : 2 + int(buf[1])]
+            host = string(dstAddr)
+        case 4:
+            // ipv6
+            host = net.IP(buf[1:17]).String()
+    }
+
+    port := binary.BigEndian.Uint16(buf[reqLen - 2 : reqLen])
     host = net.JoinHostPort(host, strconv.Itoa(int(port)))
 
     fmt.Println("dst:", host)
@@ -73,9 +84,9 @@ func getRequest(conn *net.TCPConn) (err error){
     }
     
     // 如果有额外的数据，转发给remote。正常情况下是没有额外数据的，但如果客户端通过端口转发连接服务端，就会有
-    if n > 1 + dstAddrLen + 2 {
-        if _, err = remote.Write(buf[1 + dstAddrLen + 2 : n]); err != nil {
-            return  
+    if n > reqLen {
+        if _, err = remote.Write(buf[reqLen : n]); err != nil {
+            return
         }
     }
    
@@ -124,7 +135,7 @@ func encodeData(data []byte) {
 
 func main() {
     var localAddr string
-    flag.StringVar(&localAddr, "l", "0.0.0.0:1080", "监听端口")
+    flag.StringVar(&localAddr, "l", "0.0.0.0:8388", "监听端口")
     flag.Parse()
 
     numCPU := runtime.NumCPU()

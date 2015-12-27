@@ -8,6 +8,7 @@ import (
     "flag"
     "os"
     "asocks"
+    "io"
 )
 
 func handleConnection(conn *net.TCPConn) {
@@ -21,23 +22,26 @@ func handleConnection(conn *net.TCPConn) {
 
     var n int
     var err error
-    buf := make([]byte, 256)
+    buf := make([]byte, 257)
 
-    if n, err = conn.Read(buf); err != nil {
-        fmt.Println("从client读握手就读失败了。err:", err)
-        return 
-    }
-
-    if n >= 3 {
-        if buf[0] != 5 {
-            fmt.Printf("握手时读取到的socks版本是%d。\n", buf[0])
-            return
-        }
-    } else {
-        fmt.Printf("握手时，读到了%d个字节。\n", n)
+    if n, err = io.ReadAtLeast(conn, buf, 2); err != nil {
+        fmt.Println(err)
         return
     }
-    
+
+    if buf[0] != 5 {
+        fmt.Printf("握手时读取到的socks版本是%d。\n", buf[0])
+        return
+    }
+
+    nmethods := int(buf[1]) 
+    if n < nmethods + 2 {
+        if _, err = io.ReadFull(conn, buf[n : nmethods + 2]); err != nil {
+            fmt.Println(err)
+            return
+        }
+    }
+
     if _, err = conn.Write([]byte{5, 0}); err != nil {
         fmt.Println("握手时，写失败。err:", err)
         return
@@ -53,12 +57,11 @@ func handleConnection(conn *net.TCPConn) {
     return
 }
 
-func getRequest(conn *net.TCPConn) (err error){
+func getRequest(conn *net.TCPConn) (err error) {
     var n int
-    buf := make([]byte, 256)
+    buf := make([]byte, 260)
 
-    if n, err = conn.Read(buf); err != nil {
-        err = fmt.Errorf("getRequest read error:", err.Error())
+    if n, err = io.ReadAtLeast(conn, buf, 5); err != nil {
         return
     }
 
@@ -67,24 +70,32 @@ func getRequest(conn *net.TCPConn) (err error){
         return
     }
 
-    var rawRequest []byte
+    var reqLen = 0;
 
     switch buf[3] {
         case 1:
             // ipv4
-            rawRequest = make([]byte, 1+4+2)
+            reqLen = 4 + 4 + 2
         case 3:
             // domain
-            domainLen := buf[4]
-            rawRequest = make([]byte, 1 + 1 + domainLen + 2)
+            domainLen := int(buf[4])
+            reqLen = 4 + 1 + domainLen + 2
         case 4:
             // ipv6
-            rawRequest = make([]byte, 1 + 16 + 2)
+            reqLen = 4 + 16 + 2
         default:
             // unnormal, close conn
             err = fmt.Errorf("request type不正确：%d", buf[3])
             return
     }
+
+    if n < reqLen {
+        if _, err = io.ReadFull(conn, buf[n : reqLen]); err != nil {
+            return
+        }
+    }
+
+    rawRequest := make([]byte, reqLen - 3)
     copy(rawRequest, buf[3:n])
    
     var remote *net.TCPConn
