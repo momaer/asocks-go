@@ -4,6 +4,7 @@ import (
     "fmt"
     "net"
     "io"
+    "flag"
 )
 
 func handleConn(conn *net.TCPConn, raddr *net.TCPAddr) {
@@ -33,12 +34,29 @@ func pipe(src, dst *net.TCPConn, finish chan bool) {
     io.Copy(dst, src)
 }
 
-var laddr string = ":17570" 
-var raddr string = "actself.me:17570" 
-
 func main() {
-    a, _ := net.ResolveTCPAddr("tcp", laddr) 
-    b, _ := net.ResolveTCPAddr("tcp", raddr)
+    var laddr string
+    var raddr string
+
+    flag.StringVar(&laddr, "l", "", "local address") 
+    flag.StringVar(&raddr, "r", "", "remote address") 
+
+    flag.Parse()
+
+    if laddr == "" || raddr == "" {
+        fmt.Printf("-l localAddress -r remoteAddress\n")
+        return
+    }
+
+    a, err := net.ResolveTCPAddr("tcp", laddr) 
+    if err != nil {
+        fmt.Println(err)
+        return 
+    }
+    b, err := net.ResolveTCPAddr("tcp", raddr)
+    if err != nil {
+        fmt.Println(err)
+    } 
     
     ln, err := net.ListenTCP("tcp", a) 
     if err != nil {
@@ -47,6 +65,7 @@ func main() {
     }
     defer ln.Close()
     fmt.Println("listening on ", ln.Addr())
+    fmt.Println("remote address: ", raddr)
 
     for {
         conn, err := ln.AcceptTCP()
