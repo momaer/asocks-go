@@ -56,12 +56,13 @@ func main() {
     b, err := net.ResolveTCPAddr("tcp", raddr)
     if err != nil {
         fmt.Println(err)
+        return
     } 
     
     ln, err := net.ListenTCP("tcp", a) 
     if err != nil {
         fmt.Println("listen error:", err)
-        return;
+        return
     }
     defer ln.Close()
     fmt.Println("listening on ", ln.Addr())
