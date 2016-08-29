@@ -25,6 +25,10 @@ func getRequest(conn *net.TCPConn) (err error){
     var n int
     buf := make([]byte, 257)
 
+    if n, err = io.ReadAtLeast(conn, buf, 8); err != nil {
+        return
+    }
+
     if n, err = io.ReadAtLeast(conn, buf, 2); err != nil {
         return
     }
