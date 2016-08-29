@@ -95,17 +95,17 @@ func getRequest(conn *net.TCPConn) (err error) {
 		}
 	}
 
-    // insert 8 bytes random data
-	rawRequest := make([]byte, reqLen-3 + 8)
-    copy(rawRequest, []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08})
-	copy(rawRequest[8:], buf[3:n])
+    // insert 1 bytes random data
+	rawRequest := make([]byte, reqLen - 3 + 1)
+    copy(rawRequest, []byte{0x01})
+	copy(rawRequest[1:], buf[3:n])
 
 	var remote *net.TCPConn
 	if remote, err = net.DialTCP("tcp", nil, &server); err != nil {
 		return
 	}
 
-	encodeData(rawRequest)
+    encodeData(rawRequest)
 	if n, err = remote.Write(rawRequest); err != nil {
 		fmt.Println("getRequest 发送request到远程服务器失败。err:", err)
 		remote.Close()

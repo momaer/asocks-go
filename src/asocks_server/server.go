@@ -25,7 +25,9 @@ func getRequest(conn *net.TCPConn) (err error){
     var n int
     buf := make([]byte, 257)
 
-    if n, err = io.ReadAtLeast(conn, buf, 8); err != nil {
+    // ignore first byte
+    bufOneByte := make([]byte, 1)
+    if n, err = io.ReadFull(conn, bufOneByte); err != nil {
         return
     }
 
@@ -34,7 +36,6 @@ func getRequest(conn *net.TCPConn) (err error){
     }
 
     encodeData(buf)
-
     addressType := buf[0]
     reqLen := 0;
 
@@ -53,7 +54,7 @@ func getRequest(conn *net.TCPConn) (err error){
             err = fmt.Errorf("error ATYP:%d\n", buf[0])
             return
     }
-    
+
     if n < reqLen {
         if _, err = io.ReadFull(conn, buf[n : reqLen]); err != nil {
             return
