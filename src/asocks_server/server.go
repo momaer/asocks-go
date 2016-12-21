@@ -25,11 +25,19 @@ func getRequest(conn *net.TCPConn) (err error){
     var n int
     buf := make([]byte, 257)
 
-    // ignore first byte
+    // 第一个字节表示噪音的数量
     bufOneByte := make([]byte, 1)
     if n, err = io.ReadFull(conn, bufOneByte); err != nil {
         return
     }
+	encodeData(bufOneByte)
+	noiseLength := int(bufOneByte[0])
+
+	noiseBuf := make([]byte, noiseLength)
+	// 忽略掉噪音
+	if n, err = io.ReadAtLeast(conn, noiseBuf, noiseLength); err != nil {
+		return
+	}
 
     if n, err = io.ReadAtLeast(conn, buf, 2); err != nil {
         return

@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"time"
+	"math/rand"
 )
 
 func handleConnection(conn *net.TCPConn) {
@@ -95,10 +96,16 @@ func getRequest(conn *net.TCPConn) (err error) {
 		}
 	}
 
-    // insert 1 bytes random data
-	rawRequest := make([]byte, reqLen - 3 + 1)
-    copy(rawRequest, []byte{0x01})
-	copy(rawRequest[1:], buf[3:n])
+    // 第一个字节是噪音长度，后面的是噪音，再往后才是正常的数据
+	rand.Seed(time.Now().UnixNano())
+	noiseLength := rand.Intn(255)
+	noiseLength = noiseLength + 1
+	noise := make([]byte, noiseLength)
+
+	rawRequest := make([]byte, reqLen - 3 + 1 + noiseLength)
+    copy(rawRequest, []byte{byte(noiseLength)})
+	copy(rawRequest[1:], noise)
+	copy(rawRequest[1 + noiseLength:], buf[3:n])
 
 	var remote *net.TCPConn
 	if remote, err = net.DialTCP("tcp", nil, &server); err != nil {
